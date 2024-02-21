@@ -1,34 +1,20 @@
-from datetime import datetime
+from datetime import datetime, date
+from sqlalchemy import Column, Integer, String, DateTime, Date
+from sqlalchemy.orm import declarative_base
 
-from sqlalchemy import String, DateTime
-from sqlalchemy.orm import mapped_column, Mapped, DeclarativeBase
-
-
-class Base(DeclarativeBase):
-    pass
-
+Base = declarative_base()
 
 class UserData(Base):
     __tablename__ = "user_data"
 
-    id: Mapped[int] = mapped_column(
-        int, doc="Идентификатор", primary_key=True, autoincrement=True
-    )
-    time_create: Mapped[datetime] = mapped_column(
-        DateTime(), doc="Дата списания", nullable=True
-    )
-    time_insure_end: Mapped[datetime] = mapped_column(
-        DateTime(), doc="Дата окончания полиса", nullable=True)
-    first_name: Mapped[str] = mapped_column(
-        String(), doc="Имя", nullable=True)
-    middle_name: Mapped[str] = mapped_column(
-        String(), doc="Отчество", nullable=True)
-    last_name: Mapped[str] = mapped_column(
-        String(), doc="Фамилия", nullable=True)
-    phone: Mapped[str] = mapped_column(
-        String(), doc="Телефон", nullable=True)
-    email: Mapped[str] = mapped_column(
-        String(), doc="Email", nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    time_create = Column(DateTime(timezone=True), nullable=True)
+    time_insure_end = Column(Date, nullable=True)
+    first_name = Column(String, nullable=True)
+    middle_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
 
     def to_dict(self):
         return {

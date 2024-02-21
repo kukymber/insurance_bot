@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, date
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, FastAPI
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
 from src.api.schema import UserDataSchema
@@ -11,9 +12,17 @@ from src.models.model import UserData
 user_router = APIRouter()
 
 
-@user_router.post("/create", response_model=UserData)
+@user_router.post("/create")
 async def post_user(session: SessionAnnotated, schema: UserDataSchema):
-    user_data = UserData(**schema.dict())
+    user_data = UserData(
+        time_create=schema.time_create,
+        time_insure_end=schema.time_insure_end,
+        first_name=schema.first_name.capitalize(),
+        middle_name=schema.middle_name.capitalize(),
+        last_name=schema.last_name.capitalize(),
+        phone=schema.phone,
+        email=schema.email
+    )
     try:
         session.add(user_data)
         await session.commit()
@@ -24,15 +33,16 @@ async def post_user(session: SessionAnnotated, schema: UserDataSchema):
     return {"message": "Пользователь создан успешно"}
 
 
-@user_router.get("/{user_id}", response_model=UserData)
+@user_router.get("/{user_id}")
 async def get_user(session: SessionAnnotated, user_id: int):
-    user_query = await session.execute(select(UserData).where(UserData.id == user_id)).fetchone()
-    if user_query is None:
+    user_query = await session.execute(select(UserData).where(UserData.id == user_id))
+    user = user_query.scalars().first()
+    if user is None:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
-    return user_query.to_dict()
+    return user.to_dict()
 
 
-@user_router.put("/{user_id}", response_model=UserData)
+@user_router.put("/{user_id}")
 async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataSchema):
     user = await session.execute(select(UserData).where(UserData.id == user_id))
     user = user.scalars().first()
@@ -47,17 +57,19 @@ async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataS
     return HTTPException(status_code=200, detail="Данные пользователя успешно обновлены")
 
 
-@user_router.get("/get_all", response_model=UserData)
-async def get_all_user(session: SessionAnnotated, user_id: int = None, date_insurance_end: datetime = None,
-                       phone_number: str = None, limit: int = 10, page: int = 1):
+@user_router.get("/get_all/")
+async def get_all_user(session: SessionAnnotated,
+                       date_insurance_end: Optional[date] = Query(None),
+                       phone_number: Optional[str] = Query(None),
+                       limit: int = 10,
+                       page: int = 1
+                       ):
     query = select(UserData)
 
-    if user_id is not None:
-        query = query.filter(UserData.id == user_id)
     if date_insurance_end is not None:
         query = query.filter(UserData.time_insure_end <= date_insurance_end)
     if phone_number is not None:
-        query = query.filter(UserData.phone == phone_number)
+        query = query.filter(UserData.phone.like(f"%{phone_number}%"))
 
     result = await session.execute(query)
     user_data = result.scalars().all()
@@ -72,8 +84,7 @@ async def get_all_user(session: SessionAnnotated, user_id: int = None, date_insu
     except EmptyPage:
         raise HTTPException(status_code=404, detail="This page contains no results")
 
-    users_data = [user.to_dict() for user in
-                  page_data.object_list]
+    users_data = [user.to_dict() for user in page_data.object_list]
 
     return {
         "total": paginator.count,
@@ -83,12 +94,12 @@ async def get_all_user(session: SessionAnnotated, user_id: int = None, date_insu
     }
 
 
-@user_router.delete("/{user_id}", response_model=UserData)
+@user_router.delete("/{user_id}")
 async def delete_user(session: SessionAnnotated, user_id: int):
-    user_query = session.execute(select(UserData).where(UserData.id == user_id)).fetchone()
-    session.delete(user_query)
+    user_query = await session.execute(select(UserData).where(UserData.id == user_id))
+    user = user_query.scalars().first()
+    await session.delete(user)
     await session.commit()
     if user_query is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return user_query
-
+    return {"message": "Пользователь удален успешно"}
