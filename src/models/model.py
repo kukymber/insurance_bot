@@ -1,8 +1,9 @@
 from datetime import datetime, date
-from sqlalchemy import Column, Integer, String, DateTime, Date
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean, ForeignKey
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
+# TODO написать функцию для автоматического создания to_dict()
 
 class UserData(Base):
     __tablename__ = "user_data"
@@ -16,6 +17,8 @@ class UserData(Base):
     phone = Column(String, nullable=True)
     email = Column(String, nullable=True)
 
+    insurance = relationship("InsuranceInfo", back_populates="user")
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -27,3 +30,14 @@ class UserData(Base):
             'phone': self.phone,
             'email': self.email
         }
+
+
+class InsuranceInfo(Base):
+    __tablename__ = "insurance_info"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    description = Column(String, nullable=True)
+    polis_extended = Column(Boolean, default=False)
+    user_id = Column(Integer, ForeignKey('user_data.id'), use_alter=True, onupdate="RESTRICT", ondelete="RESTRICT")
+
+    user = relationship("UserData", back_populates="insurance")
