@@ -51,6 +51,8 @@ async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataS
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
     for var, value in schema.dict(exclude_unset=True).items():
+        if var in ['first_name', 'middle_name', 'last_name']:
+            value = value.capitalize()
         setattr(user, var, value)
     session.add(user)
     await session.commit()
@@ -60,16 +62,24 @@ async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataS
 @user_router.get("/get_all/")
 async def get_all_user(session: SessionAnnotated,
                        date_insurance_end: Optional[date] = Query(None),
-                       phone_number: Optional[str] = Query(None),
-                       limit: int = 10,
-                       page: int = 1
-                       ):
+                       search_query: Optional[str] = Query(None)):
     query = select(UserData)
 
     if date_insurance_end is not None:
         query = query.filter(UserData.time_insure_end <= date_insurance_end)
-    if phone_number is not None:
-        query = query.filter(UserData.phone.like(f"%{phone_number}%"))
+    if search_query is not None:
+        if search_query.isdigit():
+            query = query.filter(UserData.phone.like(f"%{search_query}%"))
+        else:
+            parts = search_query.split('+')
+            surname = parts[0]
+            query = query.filter(UserData.last_name.like(f"{surname}%"))
+            if len(parts) > 1:
+                name = parts[1]
+                query = query.filter(UserData.first_name.like(f"{name}%"))
+            if len(parts) > 2:
+                patronymic = parts[2]
+                query = query.filter(UserData.middle_name.like(f"{patronymic}%"))
 
     result = await session.execute(query)
     user_data = result.scalars().all()
@@ -77,21 +87,9 @@ async def get_all_user(session: SessionAnnotated,
     if not user_data:
         raise HTTPException(status_code=404, detail="Users not found")
 
-    paginator = Paginator(user_data, limit)
+    users_data = [user.to_dict() for user in user_data]
 
-    try:
-        page_data = paginator.page(page)
-    except EmptyPage:
-        raise HTTPException(status_code=404, detail="This page contains no results")
-
-    users_data = [user.to_dict() for user in page_data.object_list]
-
-    return {
-        "total": paginator.count,
-        "total_pages": paginator.num_pages,
-        "current_page": page,
-        "data": users_data
-    }
+    return users_data
 
 
 @user_router.delete("/{user_id}")
