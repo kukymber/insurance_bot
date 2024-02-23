@@ -38,6 +38,6 @@ class InsuranceInfo(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     description = Column(String, nullable=True)
     polis_extended = Column(Boolean, default=False)
-    user_id = Column(Integer, ForeignKey('user_data.id'), use_alter=True, onupdate="RESTRICT", ondelete="RESTRICT")
+    user_id = Column(Integer, ForeignKey('user_data.id', onupdate="RESTRICT", ondelete="RESTRICT"))
 
     user = relationship("UserData", back_populates="insurance")

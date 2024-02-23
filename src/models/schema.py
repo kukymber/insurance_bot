@@ -13,3 +13,9 @@ class UserData(BaseModel):
     phone: str
     email: str
 
+
+class InsuranceInfo(BaseModel):
+    id: int
+    description: str
+    polis_extended: bool
+    user_id: int
