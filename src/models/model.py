@@ -1,8 +1,11 @@
-from datetime import datetime, date
-from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean, ForeignKey, Enum
 from sqlalchemy.orm import declarative_base, relationship
 
+from src.models.enum import InsuranceInfoEnum
+
 Base = declarative_base()
+
+
 # TODO написать функцию для автоматического создания to_dict()
 
 class UserData(Base):
@@ -37,7 +40,17 @@ class InsuranceInfo(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     description = Column(String, nullable=True)
+    polis_type = Column(Enum(InsuranceInfoEnum, name="insurance_info_enum"), nullable=True)
     polis_extended = Column(Boolean, default=False)
     user_id = Column(Integer, ForeignKey('user_data.id', onupdate="RESTRICT", ondelete="RESTRICT"))
 
     user = relationship("UserData", back_populates="insurance")
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'description': self.description,
+            'polis_type': self.polis_type.value if self.polis_type else None,
+            'polis_extended': self.polis_extended,
+            'user_id': self.user_id,
+        }
