@@ -40,7 +40,7 @@ class InsuranceInfo(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     description = Column(String, nullable=True)
-    polis_type = Column(Enum(InsuranceInfoEnum, name="insurance_info_enum"), nullable=True)
+    polis_type = Column(Enum(InsuranceInfoEnum, name="insurance_info_enum"), nullable=False)
     polis_extended = Column(Boolean, default=False)
     user_id = Column(Integer, ForeignKey('user_data.id', onupdate="RESTRICT", ondelete="RESTRICT"))
 

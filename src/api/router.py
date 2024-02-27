@@ -7,7 +7,7 @@ from sqlalchemy import select
 from src.api.schema import UserDataSchema
 from src.core.db import SessionAnnotated
 from src.core.paginator import Paginator, EmptyPage
-from src.models.model import UserData
+from src.models.model import UserData, InsuranceInfo
 
 user_router = APIRouter()
 
@@ -23,8 +23,16 @@ async def post_user(session: SessionAnnotated, schema: UserDataSchema):
         phone=schema.phone,
         email=schema.email
     )
+    session.add(user_data)
+    await session.flush()
+    polis_info = InsuranceInfo(
+        description=schema.description,
+        polis_type=schema.polis_type,
+        polis_extended=schema.polis_extended,
+        user_id=user_data.id,
+    )
+    session.add(polis_info)
     try:
-        session.add(user_data)
         await session.commit()
     except Exception as exp:
         await session.rollback()
@@ -37,7 +45,7 @@ async def post_user(session: SessionAnnotated, schema: UserDataSchema):
 async def get_user(session: SessionAnnotated, user_id: int):
     user_query = await session.execute(select(UserData).where(UserData.id == user_id))
     user = user_query.scalars().first()
-    if user is None:
+    if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
     return user.to_dict()
 
@@ -47,7 +55,7 @@ async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataS
     user = await session.execute(select(UserData).where(UserData.id == user_id))
     user = user.scalars().first()
 
-    if user is None:
+    if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
     for var, value in schema.dict(exclude_unset=True).items():
@@ -65,9 +73,9 @@ async def get_all_user(session: SessionAnnotated,
                        search_query: Optional[str] = Query(None)):
     query = select(UserData)
 
-    if date_insurance_end is not None:
+    if date_insurance_end:
         query = query.filter(UserData.time_insure_end <= date_insurance_end)
-    if search_query is not None:
+    if search_query:
         if search_query.isdigit():
             query = query.filter(UserData.phone.like(f"%{search_query}%"))
         else:
@@ -98,6 +106,6 @@ async def delete_user(session: SessionAnnotated, user_id: int):
     user = user_query.scalars().first()
     await session.delete(user)
     await session.commit()
-    if user_query is None:
+    if user_query:
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "Пользователь удален успешно"}
