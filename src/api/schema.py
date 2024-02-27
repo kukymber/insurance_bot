@@ -10,8 +10,6 @@ class InsuranceInfo(BaseModel):
     description: str
     polis_type: str = InsuranceInfoEnum
     polis_extended: bool = Field(default=False)
-    user_id: int
-
 
 class UserDataSchema(InsuranceInfo):
     time_create: datetime
