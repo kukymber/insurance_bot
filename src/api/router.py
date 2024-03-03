@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
-from src.api.schema import UserDataSchema
+from src.api.schema import UserDataSchema, InsuranceInfoSchema
 from src.core.db import SessionAnnotated
 from src.core.paginator import Paginator, EmptyPage
 from src.models.model import UserData, InsuranceInfo
@@ -59,13 +59,27 @@ async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataS
         raise HTTPException(status_code=404, detail="Пользователь не найден")
 
     for var, value in schema.dict(exclude_unset=True).items():
-        if var in ['first_name', 'middle_name', 'last_name']:
-            value = value.capitalize()
-        setattr(user, var, value)
-    session.add(user)
-    await session.commit()
-    return HTTPException(status_code=200, detail="Данные пользователя успешно обновлены")
+        setattr(user, var, value.capitalize() if var in ['first_name', 'middle_name', 'last_name'] else value)
 
+    polis = await session.execute(select(InsuranceInfo).where(InsuranceInfo.user_id == user_id))
+    polis = polis.scalars().first()
+
+    if polis:
+        for var, value in schema.dict(exclude_unset=True, exclude_none=True).items():
+            setattr(polis, var, value)
+    else:
+        raise HTTPException(status_code=404, detail="Данные о полисе пользователя не найдены")
+
+    session.add(user)
+    session.add(polis)
+
+    try:
+        await session.commit()
+    except Exception as exp:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail=str(exp))
+
+    return {"message": "Пользователь и его полис обновлены успешно"}
 
 @user_router.get("/get_all/")
 async def get_all_user(session: SessionAnnotated,

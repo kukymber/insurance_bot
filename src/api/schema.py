@@ -6,12 +6,12 @@ from pydantic import BaseModel, EmailStr, validator, Field
 from src.models.enum import InsuranceInfoEnum
 
 
-class InsuranceInfo(BaseModel):
+class InsuranceInfoSchema(BaseModel):
     description: str
     polis_type: str = InsuranceInfoEnum
     polis_extended: bool = Field(default=False)
 
-class UserDataSchema(InsuranceInfo):
+class UserDataSchema(InsuranceInfoSchema):
     time_create: datetime
     time_insure_end: date
     first_name: str
