@@ -11,6 +11,8 @@ class InsuranceInfoSchema(BaseModel):
     polis_type: str = InsuranceInfoEnum
     polis_extended: bool = Field(default=False)
     time_insure_end: date
+
+
 class UserDataSchema(InsuranceInfoSchema):
     time_create: datetime
     first_name: str

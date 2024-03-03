@@ -1,12 +1,12 @@
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, List
 
+from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
-from src.api.schema import UserDataSchema, InsuranceInfoSchema
+from src.api.schema import UserDataSchema
 from src.core.db import SessionAnnotated
-from src.core.paginator import Paginator, EmptyPage
 from src.models.model import UserData, InsuranceInfo
 
 user_router = APIRouter()
@@ -14,22 +14,22 @@ user_router = APIRouter()
 
 @user_router.post("/create")
 async def post_user(session: SessionAnnotated, schema: UserDataSchema):
-    user_data = UserData(
+    user = UserData(
         time_create=schema.time_create,
-        time_insure_end=schema.time_insure_end,
         first_name=schema.first_name.capitalize(),
         middle_name=schema.middle_name.capitalize(),
         last_name=schema.last_name.capitalize(),
         phone=schema.phone,
         email=schema.email
     )
-    session.add(user_data)
+    session.add(user)
     await session.flush()
     polis_info = InsuranceInfo(
         description=schema.description,
         polis_type=schema.polis_type,
         polis_extended=schema.polis_extended,
-        user_id=user_data.id,
+        time_insure_end=schema.time_insure_end,
+        user_id=user.id,
     )
     session.add(polis_info)
     try:
@@ -45,9 +45,11 @@ async def post_user(session: SessionAnnotated, schema: UserDataSchema):
 async def get_user(session: SessionAnnotated, user_id: int):
     user_query = await session.execute(select(UserData).where(UserData.id == user_id))
     user = user_query.scalars().first()
-    if not user:
+    polis = await session.execute(select(InsuranceInfo).where(InsuranceInfo.user_id == user_id))
+    polis = polis.scalars().first()
+    if not user or not polis:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
-    return user.to_dict()
+    return {**user.to_dict(), **polis.to_dict()}
 
 
 @user_router.put("/{user_id}")
@@ -81,27 +83,32 @@ async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataS
 
     return {"message": "Пользователь и его полис обновлены успешно"}
 
-@user_router.get("/get_all/")
-async def get_all_user(session: SessionAnnotated,
-                       date_insurance_end: Optional[date] = Query(None),
-                       search_query: Optional[str] = Query(None)):
-    query = select(UserData)
 
+@user_router.get("/get_all/", response_model=List[UserDataSchema])
+async def get_all_user(session: SessionAnnotated,
+                       date_insurance_end: Optional[str] = Query(None),
+                       search_query: Optional[str] = Query(None)):
     if date_insurance_end:
-        query = query.filter(UserData.time_insure_end <= date_insurance_end)
-    if search_query:
-        if search_query.isdigit():
-            query = query.filter(UserData.phone.like(f"%{search_query}%"))
-        else:
-            parts = search_query.split('+')
-            surname = parts[0]
-            query = query.filter(UserData.last_name.like(f"{surname}%"))
-            if len(parts) > 1:
-                name = parts[1]
-                query = query.filter(UserData.first_name.like(f"{name}%"))
-            if len(parts) > 2:
-                patronymic = parts[2]
-                query = query.filter(UserData.middle_name.like(f"{patronymic}%"))
+        # Преобразование строки в объект datetime
+        end_date = datetime.strptime(date_insurance_end, "%d.%m.%Y").date()
+        # Вычисление начальной даты, вычитая два месяца
+        start_date = end_date - relativedelta(months=2)
+
+        query = select(InsuranceInfo).join(UserData, UserData.id == InsuranceInfo.user_id) \
+            .filter(InsuranceInfo.time_insure_end >= start_date,
+                    InsuranceInfo.time_insure_end <= end_date)
+    else:
+        query = select(UserData).join(InsuranceInfo, UserData.id == InsuranceInfo.user_id)
+
+        parts = search_query.split('+')
+        surname = parts[0]
+        query = query.filter(UserData.last_name.like(f"{surname}%"))
+        if len(parts) > 1:
+            name = parts[1]
+            query = query.filter(UserData.first_name.like(f"{name}%"))
+        if len(parts) > 2:
+            patronymic = parts[2]
+            query = query.filter(UserData.middle_name.like(f"{patronymic}%"))
 
     result = await session.execute(query)
     user_data = result.scalars().all()
