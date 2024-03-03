@@ -13,7 +13,6 @@ class UserData(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     time_create = Column(DateTime(timezone=True), nullable=True)
-    time_insure_end = Column(Date, nullable=True)
     first_name = Column(String, nullable=True)
     middle_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
@@ -26,7 +25,6 @@ class UserData(Base):
         return {
             'id': self.id,
             'time_create': self.time_create.isoformat() if self.time_create else None,
-            'time_insure_end': self.time_insure_end.isoformat() if self.time_insure_end else None,
             'first_name': self.first_name,
             'middle_name': self.middle_name,
             'last_name': self.last_name,
@@ -40,6 +38,7 @@ class InsuranceInfo(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     description = Column(String, nullable=True)
+    time_insure_end = Column(Date, nullable=True)
     polis_type = Column(Enum(InsuranceInfoEnum, name="insurance_info_enum"), nullable=False)
     polis_extended = Column(Boolean, default=False)
     user_id = Column(Integer, ForeignKey('user_data.id', onupdate="RESTRICT", ondelete="RESTRICT"))
@@ -50,6 +49,7 @@ class InsuranceInfo(Base):
         return {
             'id': self.id,
             'description': self.description,
+            'time_insure_end': self.time_insure_end.isoformat() if self.time_insure_end else None,
             'polis_type': self.polis_type.value if self.polis_type else None,
             'polis_extended': self.polis_extended,
             'user_id': self.user_id,
