@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime
 from typing import Optional, List
 
 from dateutil.relativedelta import relativedelta
@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from src.api.schema import UserDataSchema
 from src.core.db import SessionAnnotated
+from src.core.paginator import Paginator
 from src.models.model import UserData, InsuranceInfo
 
 user_router = APIRouter()
@@ -84,31 +85,32 @@ async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataS
     return {"message": "Пользователь и его полис обновлены успешно"}
 
 
-@user_router.get("/get_all/", response_model=List[UserDataSchema])
+@user_router.get("/get_all/")
 async def get_all_user(session: SessionAnnotated,
                        date_insurance_end: Optional[str] = Query(None),
-                       search_query: Optional[str] = Query(None)):
+                       search_query: Optional[str] = Query(None),
+                       page_number: int = Query(1, alias="page"),
+                       page_size: int = Query(10, alias="size")
+                       ):
     if date_insurance_end:
-        # Преобразование строки в объект datetime
-        end_date = datetime.strptime(date_insurance_end, "%d.%m.%Y").date()
-        # Вычисление начальной даты, вычитая два месяца
+        end_date = datetime.fromisoformat(date_insurance_end).date()
         start_date = end_date - relativedelta(months=2)
-
-        query = select(InsuranceInfo).join(UserData, UserData.id == InsuranceInfo.user_id) \
-            .filter(InsuranceInfo.time_insure_end >= start_date,
-                    InsuranceInfo.time_insure_end <= end_date)
+        query = select(InsuranceInfo).join(UserData, UserData.id == InsuranceInfo.user_id).filter(
+            InsuranceInfo.time_insure_end >= start_date,
+            InsuranceInfo.time_insure_end <= end_date
+        )
     else:
         query = select(UserData).join(InsuranceInfo, UserData.id == InsuranceInfo.user_id)
-
-        parts = search_query.split('+')
-        surname = parts[0]
-        query = query.filter(UserData.last_name.like(f"{surname}%"))
-        if len(parts) > 1:
-            name = parts[1]
-            query = query.filter(UserData.first_name.like(f"{name}%"))
-        if len(parts) > 2:
-            patronymic = parts[2]
-            query = query.filter(UserData.middle_name.like(f"{patronymic}%"))
+        if search_query:
+            parts = search_query.split('+')
+            surname = parts[0]
+            query = query.filter(UserData.last_name.like(f"{surname}%"))
+            if len(parts) > 1:
+                name = parts[1]
+                query = query.filter(UserData.first_name.like(f"{name}%"))
+            if len(parts) > 2:
+                patronymic = parts[2]
+                query = query.filter(UserData.middle_name.like(f"{patronymic}%"))
 
     result = await session.execute(query)
     user_data = result.scalars().all()
@@ -116,9 +118,15 @@ async def get_all_user(session: SessionAnnotated,
     if not user_data:
         raise HTTPException(status_code=404, detail="Users not found")
 
-    users_data = [user.to_dict() for user in user_data]
+    paginator = Paginator(user_data, page_size)
+    page = paginator.page(page_number)
 
-    return users_data
+    return {
+        "total": paginator.count,
+        "total_pages": paginator.num_pages,
+        "current_page": page.number,
+        "users": [user.to_dict() for user in page.object_list]
+    }
 
 
 @user_router.delete("/{user_id}")

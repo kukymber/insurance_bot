@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean, ForeignKey, Enum
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 
 from src.models.enum import InsuranceInfoEnum
 
