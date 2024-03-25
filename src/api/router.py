@@ -3,11 +3,12 @@ from typing import Optional, List
 
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
 from src.api.schema import UserDataSchema
 from src.core.db import SessionAnnotated
 from src.core.paginator import Paginator
+from src.models.enum import InsuranceInfoEnum
 from src.models.model import UserData, InsuranceInfo
 
 user_router = APIRouter()
@@ -85,41 +86,46 @@ async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataS
     return {"message": "Пользователь и его полис обновлены успешно"}
 
 
-@user_router.get("/get_all/")
-async def get_all_user(session: SessionAnnotated,
-                       date_insurance_end: Optional[str] = Query(None),
-                       search_query: Optional[str] = Query(None),
-                       page_number: int = Query(1, alias="page"),
-                       page_size: int = Query(10, alias="size")
-                       ):
-    if date_insurance_end:
-        end_date = datetime.fromisoformat(date_insurance_end).date()
-        start_date = end_date - relativedelta(months=2)
-        query = select(InsuranceInfo).join(UserData, UserData.id == InsuranceInfo.user_id).filter(
-            InsuranceInfo.time_insure_end >= start_date,
-            InsuranceInfo.time_insure_end <= end_date
-        )
-    else:
-        query = select(UserData).join(InsuranceInfo, UserData.id == InsuranceInfo.user_id)
-        if search_query:
-            parts = search_query.split('+')
-            surname = parts[0]
-            query = query.filter(UserData.last_name.like(f"{surname}%"))
-            if len(parts) > 1:
-                name = parts[1]
-                query = query.filter(UserData.first_name.like(f"{name}%"))
-            if len(parts) > 2:
-                patronymic = parts[2]
-                query = query.filter(UserData.middle_name.like(f"{patronymic}%"))
+@user_router.get("/users/get_all/")
+async def get_all_users(
+        session: SessionAnnotated,
+        date_insurance_end: Optional[str] = Query(None),
+        search_query: Optional[str] = Query(None),
+        polis_type: Optional[str] = Query(None),
+        page_number: int = Query(1, alias="page"),
+        page_size: int = Query(10, alias="size")
+):
+    end_date = None
+    try:
+        if date_insurance_end:
+            end_date = datetime.strptime(date_insurance_end, '%d.%m.%Y').date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date_insurance_end format. Use DD.MM.YYYY")
+
+    query = select(UserData).join(InsuranceInfo)
+
+    if end_date:
+        query = query.where(InsuranceInfo.time_insure_end >= end_date)
+
+    if search_query:
+        search_pattern = f"%{search_query}%"
+        query = query.where(or_(
+            UserData.first_name.like(search_pattern),
+            UserData.last_name.like(search_pattern),
+            UserData.middle_name.like(search_pattern)
+        ))
+
+    if polis_type:
+        query = query.where(InsuranceInfo.polis_type == polis_type)
 
     result = await session.execute(query)
-    user_data = result.scalars().all()
+    users = result.scalars().all()
 
-    if not user_data:
-        raise HTTPException(status_code=404, detail="Users not found")
-
-    paginator = Paginator(user_data, page_size)
+    paginator = Paginator(users, page_size)
     page = paginator.page(page_number)
+
+    if not page.object_list:
+        raise HTTPException(status_code=404, detail="Users not found")
 
     return {
         "total": paginator.count,
