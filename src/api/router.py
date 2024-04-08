@@ -10,7 +10,7 @@ from src.core.db import SessionAnnotated
 from src.core.paginator import Paginator
 from src.models.enum import InsuranceInfoEnum
 from src.models.model import UserData, InsuranceInfo
-
+import logging
 user_router = APIRouter()
 
 
@@ -85,6 +85,37 @@ async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataS
 
     return {"message": "Пользователь и его полис обновлены успешно"}
 
+@user_router.put("/{user_id}")
+async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataSchema):
+    user = await session.execute(select(UserData).where(UserData.id == user_id))
+    user = user.scalars().first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    for var, value in schema.dict(exclude_unset=True).items():
+        setattr(user, var, value.capitalize() if var in ['first_name', 'middle_name', 'last_name'] else value)
+
+    polis = await session.execute(select(InsuranceInfo).where(InsuranceInfo.user_id == user_id))
+    polis = polis.scalars().first()
+
+    if polis:
+        for var, value in schema.dict(exclude_unset=True, exclude_none=True).items():
+            setattr(polis, var, value)
+    else:
+        raise HTTPException(status_code=404, detail="Данные о полисе пользователя не найдены")
+
+    session.add(user)
+    session.add(polis)
+
+    try:
+        await session.commit()
+    except Exception as exp:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail=str(exp))
+
+    return {"message": "Пользователь и его полис обновлены успешно"}
+
 
 @user_router.get("/users/get_all/")
 async def get_all_users(
@@ -96,27 +127,24 @@ async def get_all_users(
         page_size: int = Query(10, alias="size")
 ):
     end_date = None
-    try:
-        if date_insurance_end:
+    if date_insurance_end:
+        try:
             end_date = datetime.strptime(date_insurance_end, '%d.%m.%Y').date()
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date_insurance_end format. Use DD.MM.YYYY")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_insurance_end format. Use DD.MM.YYYY")
 
     query = select(UserData).join(InsuranceInfo)
-
     if end_date:
         query = query.where(InsuranceInfo.time_insure_end >= end_date)
-
+    if polis_type:
+        query = query.where(InsuranceInfo.polis_type == polis_type)
     if search_query:
         search_pattern = f"%{search_query}%"
         query = query.where(or_(
             UserData.first_name.like(search_pattern),
             UserData.last_name.like(search_pattern),
-            UserData.middle_name.like(search_pattern)
+            UserData.middle_name.like(search_pattern),
         ))
-
-    if polis_type:
-        query = query.where(InsuranceInfo.polis_type == polis_type)
 
     result = await session.execute(query)
     users = result.scalars().all()
