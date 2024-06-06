@@ -1,18 +1,20 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
 
-from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select, or_
 
 from src.api.schema import UserDataSchema
 from src.core.db import SessionAnnotated
 from src.core.paginator import Paginator
-from src.models.enum import InsuranceInfoEnum
 from src.models.model import UserData, InsuranceInfo
-import logging
+
 user_router = APIRouter()
 
+
+@user_router.get("/health")
+async def health_check():
+    return {"status": "ok"}
 
 @user_router.post("/create")
 async def post_user(session: SessionAnnotated, schema: UserDataSchema):
@@ -139,7 +141,7 @@ async def get_all_users(
     if polis_type:
         query = query.where(InsuranceInfo.polis_type == polis_type)
     if search_query:
-        search_pattern = f"%{search_query}%"
+        search_pattern = f"%{search_query.capitalize()}%"
         query = query.where(or_(
             UserData.first_name.like(search_pattern),
             UserData.last_name.like(search_pattern),
