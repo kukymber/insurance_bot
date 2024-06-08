@@ -48,13 +48,14 @@ async def post_user(session: SessionAnnotated, schema: UserDataSchema):
 
 @user_router.get("/{user_id}")
 async def get_user(session: SessionAnnotated, user_id: int):
-    user_query = await session.execute(select(UserData).where(UserData.id == user_id))
-    user = user_query.scalars().first()
-    polis = await session.execute(select(InsuranceInfo).where(InsuranceInfo.user_id == user_id))
-    polis = polis.scalars().first()
-    if not user or not polis:
+    query = select(UserData).options(joinedload(UserData.insurance)).where(UserData.id == user_id)
+    result = await session.execute(query)
+    user = result.scalars().unique().first()
+
+    if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
-    return {**user.to_dict(), **polis.to_dict()}
+
+    return user.to_dict(include_insurance=True)
 
 
 @user_router.put("/{user_id}")
