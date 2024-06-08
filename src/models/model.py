@@ -22,8 +22,8 @@ class UserData(Base):
 
     insurance = relationship("InsuranceInfo", back_populates="user")
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_insurance=False):
+        data = {
             'id': self.id,
             'time_create': self.time_create.isoformat() if self.time_create else None,
             'first_name': self.first_name,
@@ -32,6 +32,9 @@ class UserData(Base):
             'phone': self.phone,
             'email': self.email
         }
+        if include_insurance:
+            data['insurance'] = [insurance.to_dict() for insurance in self.insurance]
+        return data
 
 
 class InsuranceInfo(Base):
