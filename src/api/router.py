@@ -3,6 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select, or_
+from sqlalchemy.orm import joinedload
 
 from src.api.schema import UserDataSchema
 from src.core.db import SessionAnnotated
@@ -135,21 +136,21 @@ async def get_all_users(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date_insurance_end format. Use DD.MM.YYYY")
 
-    query = select(UserData).join(InsuranceInfo)
+    query = select(UserData).options(joinedload(UserData.insurance)).join(InsuranceInfo)
     if end_date:
-        query = query.where(InsuranceInfo.time_insure_end >= end_date)
+        query = query.filter(InsuranceInfo.time_insure_end >= end_date)
     if polis_type:
-        query = query.where(InsuranceInfo.polis_type == polis_type)
+        query = query.filter(InsuranceInfo.polis_type == polis_type)
     if search_query:
         search_pattern = f"%{search_query.capitalize()}%"
-        query = query.where(or_(
+        query = query.filter(or_(
             UserData.first_name.like(search_pattern),
             UserData.last_name.like(search_pattern),
             UserData.middle_name.like(search_pattern),
         ))
 
     result = await session.execute(query)
-    users = result.scalars().all()
+    users = result.scalars().unique().all()
 
     paginator = Paginator(users, page_size)
     page = paginator.page(page_number)
@@ -161,7 +162,7 @@ async def get_all_users(
         "total": paginator.count,
         "total_pages": paginator.num_pages,
         "current_page": page.number,
-        "users": [user.to_dict() for user in page.object_list]
+        "users": [user.to_dict(include_insurance=True) for user in page.object_list]
     }
 
 
