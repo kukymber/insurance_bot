@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 
 from src.api.schema import UserDataSchema
 from src.core.db import SessionAnnotated
-from src.core.paginator import Paginator
+from src.core.paginator import Paginator, EmptyPage
 from src.models.model import UserData, InsuranceInfo
 
 user_router = APIRouter()
@@ -124,7 +124,7 @@ async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataS
     return {"message": "Пользователь и его полис обновлены успешно"}
 
 
-@user_router.get("/users/get_all/")
+@user_router.get("/users/get_all")
 async def get_all_users(
         session: SessionAnnotated,
         date_insurance_end: Optional[str] = Query(None),
@@ -132,7 +132,7 @@ async def get_all_users(
         polis_type: Optional[str] = Query(None),
         page_number: int = Query(1, alias="page"),
         page_size: int = Query(10, alias="size")
-):
+) -> None:
     end_date = None
     if date_insurance_end:
         try:
@@ -157,11 +157,12 @@ async def get_all_users(
     users = result.scalars().unique().all()
 
     paginator = Paginator(users, page_size)
-    page = paginator.page(page_number)
-
+    try:
+        page = paginator.page(page_number)
+    except EmptyPage as e:
+        raise HTTPException(status_code=404, detail="Нет данных")
     if not page.object_list:
-        raise HTTPException(status_code=404, detail="Users not found")
-
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     return {
         "total": paginator.count,
         "total_pages": paginator.num_pages,
