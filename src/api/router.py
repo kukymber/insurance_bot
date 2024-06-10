@@ -11,11 +11,13 @@ from src.core.paginator import Paginator
 from src.models.model import UserData, InsuranceInfo
 
 user_router = APIRouter()
+server = APIRouter()
 
 
-@user_router.get("/health")
+@server.get("/health")
 async def health_check():
     return {"status": "ok"}
+
 
 @user_router.post("/create")
 async def post_user(session: SessionAnnotated, schema: UserDataSchema):
@@ -88,6 +90,7 @@ async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataS
         raise HTTPException(status_code=400, detail=str(exp))
 
     return {"message": "Пользователь и его полис обновлены успешно"}
+
 
 @user_router.put("/{user_id}")
 async def update_user(session: SessionAnnotated, user_id: int, schema: UserDataSchema):
