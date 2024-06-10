@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, List, Any
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select, or_
@@ -132,7 +132,7 @@ async def get_all_users(
         polis_type: Optional[str] = Query(None),
         page_number: int = Query(1, alias="page"),
         page_size: int = Query(10, alias="size")
-) -> None:
+) -> dict[str, int | list[Any]]:
     end_date = None
     if date_insurance_end:
         try:
@@ -168,7 +168,7 @@ async def get_all_users(
         "total_pages": paginator.num_pages,
         "current_page": page.number,
         "users": [user.to_dict(include_insurance=True) for user in page.object_list]
-    }
+           }
 
 
 @user_router.delete("/{user_id}")
